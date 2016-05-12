@@ -1,0 +1,374 @@
+<!DOCTYPE html>
+<html>
+    <head>
+        <title>Lab 8 - Puzzle Chat</title>
+                
+        <script src="js/jquery-1.10.2.js"></script>
+        <script src="js/jquery-ui-1.10.4.custom.min.js"></script>
+
+        <style>
+            body {
+                padding: 0px;
+                margin: 0px;
+                background: #954017;
+                color: white;
+                font: 14px 'Arial' sans-serif;
+            }
+
+            .content {
+                width: 960px;
+                margin: 20px auto;
+            }
+
+            #puzzleChat{
+                color:black;
+            }
+
+            #puzzle{
+                width:600px;
+                height:500px;
+                padding:10px;
+                border-radius:10px;
+                float:left;          
+                background-color:white;
+                position:relative;
+            }
+
+            .puzzlePiece{
+                position:absolute;
+                cursor:pointer;
+                z-index:2;
+            }
+
+            .activePiece{
+                z-index:3;
+                box-shadow:0px 0px 15px 2px #0000ff;
+            }
+
+            .movingPiece{
+                z-index:3;
+                opacity:0.5;
+            }
+
+            .puzzleTarget {
+                position: absolute;
+                background-color:#ccc;
+                border:1px solid black;
+                z-index:1;
+            }
+            
+            #chat {
+                float: right;
+                height: 500px;
+                background-color: white;
+                padding: 10px;
+                border-radius: 10px;
+            }
+
+            #messages {
+                width: 300px;
+                height: 380px;
+                padding-top: 10px;
+                overflow-y:auto;
+            }
+
+            #input {
+                width: 300px;
+                border-top:1px solid black;
+                padding-top:10px;
+            }
+
+            #txtMessage{
+                width:220px;
+            }
+
+            #btnSend{
+                width:70px;
+            }
+
+        </style>
+    </head>
+    <body>
+        <div class="content">
+            <h3>Puzzle Chat</h3>
+            <div id="puzzleChat">
+                <!-- Puzzle area -->
+                <div id="puzzle">
+                </div>
+
+                <!-- Chat area-->
+                <div id="chat">
+                    <h3>Messages</h3>
+                    <div id="messages">
+                        
+                    </div>
+                    <div id="input">
+                        Send a message:
+                        <br />
+                        <input id="txtMessage" type="text" />
+                        <button id="btnSend" onclick="sendMessage();">Send</button>
+                    </div>
+                </div>
+            </div>
+            <div id="error"></div>       
+        </div>
+
+        <!-- Chat application script -->
+        <script>
+            //Phony constants
+            var USERNAME = 'Username';
+            var GET_MESSAGE_SERVICE = 'http://playdoh.algonquincollege.com/lts/mike/WebServices/MessageService.asmx/GetMessages';
+            var SEND_MESSAGE_SERVICE = 'http://playdoh.algonquincollege.com/lts/mike/WebServices/MessageService.asmx/SendMessage';
+
+            ///Initialize the app
+            function init() {
+                
+            }
+            $(init);
+            function getMessages() {
+                $.ajax({
+                    url: GET_MESSAGE_SERVICE,
+                    type: 'GET',
+                    dataType: 'json',
+                    contentType: "application/json; charset=utf-8",
+                    cache: false,
+                    success: onGetMessageSuccess,
+                    error: onAjaxError
+                });
+            }
+
+            function onAjaxError(jqXHR, status, errorThrown) { 
+                $("#error").html(status + ": " + errorThrown + "<br><br>" + jqXHR.responseText); 
+            }
+
+            function onGetMessageSuccess(data) {
+                var messageList = data.d;
+                $('#messages').empty();
+                console.log(messageList[0]);
+                for (var i in messageList) { 
+                    if (messageList[i].username == USERNAME) 
+                        messageList[i].username = "YOU";
+                    var $item = createFromTemplate('messageTemplate', messageList[i]); 
+                    $item.appendTo('#messages'); 
+                } 
+            }
+
+            // setInterval(getMessages, 1000);
+            getMessages();
+
+            function sendMessage() { 
+                var msg = $('#txtMessage').val();
+                if (msg.length > 0) { 
+                    $.ajax({ 
+                        url: SEND_MESSAGE_SERVICE, 
+                        type: 'POST', 
+                        dataType: 'json', 
+                        contentType: "application/json; charset=utf-8", 
+                        data: JSON.stringify({ username: USERNAME, message: msg }), 
+                        success: onGetMessageSuccess, //Returns the list of messages 
+                        error: onAjaxError }); 
+                }
+                        //Clear the message field 
+                $('#txtMessage').val("");
+            }
+
+            
+            /**
+                Create a jQuery object from the provided template element
+            */
+            function createFromTemplate(id, data) {
+                //Append a hash tag to the id if one did not exist
+                if (id.indexOf('#') != 0)
+                    id = '#' + id;
+
+                //Get the html contents of the element with the provided id
+                var html = $(id).html();
+
+                //Replace data placeholders
+                for (var param in data) {
+                    while (html.indexOf('[' + param + ']') != -1) {
+                        html = html.replace('[' + param + ']', data[param]);
+                    }
+                }
+
+                return $(html);
+            }
+
+        </script>
+
+        <!-- Creating a puzzle -->
+        <script>
+            var PUZZLE = { 
+                url : 'http://playdoh.algonquincollege.com/lts/mike/puzzle.jpg', 
+                width : 300, 
+                height : 450, 
+                pieceSize: 150 
+            }; 
+            var PIECES_PER_ROW = PUZZLE.width / PUZZLE.pieceSize; 
+            var START_X = Math.round((600 - PUZZLE.width) / 2); 
+            var START_Y = Math.round((500 - PUZZLE.height) / 2); 
+
+            //Container to hold all existing puzzle pieces 
+            var puzzlePieces = [];      
+
+
+            var pieceCount = (PUZZLE.width / PUZZLE.pieceSize) * (PUZZLE.height / PUZZLE.pieceSize);
+
+            for (var i = 0 ; i < pieceCount; ++i) { 
+            //Determine the x/y position based on the index of the current piece 
+                var x = i % PIECES_PER_ROW; 
+                var y = Math.floor(i / PIECES_PER_ROW);
+                //Create the drag piece 
+                var $piece = $('<div>'); 
+                $piece.addClass('puzzlePiece'); 
+                $piece.css({ 
+                    width: PUZZLE.pieceSize, 
+                    height: PUZZLE.pieceSize, 
+                    left: START_X + x * PUZZLE.pieceSize, 
+                    top: START_Y + y * PUZZLE.pieceSize, 
+                    'background-image': 'url(' + PUZZLE.url + ')', 
+                    'background-position-x': (-x * PUZZLE.pieceSize) + "px", 
+                    'background-position-y': (-y * PUZZLE.pieceSize) + "px" 
+                });
+                $piece.appendTo('#puzzle'); 
+                $piece.data('index', i); //Store this piece's current index
+                $piece.data('correctPosition', i); //Store this piece's correct index
+                //Add the puzzle piece to our array 
+                puzzlePieces.push($piece);
+                //Create the drag targets 
+                var $target = $('<div>'); 
+                $target.addClass('puzzleTarget'); 
+                $target.css({ 
+                    width: PUZZLE.pieceSize - 2, //Reduced by 2 for 1px border 
+                    height: PUZZLE.pieceSize - 2, 
+                    left: START_X + x * PUZZLE.pieceSize, 
+                    top: START_Y + y * PUZZLE.pieceSize 
+                });
+                $target.appendTo('#puzzle'); 
+                $target.data('index', i); 
+                $target.droppable({ drop : onPieceDrop })
+                $piece.draggable({ 
+                    containment: 'parent', 
+                    start: onDragStart, 
+                    stop: onDragStop, 
+                });
+            }
+
+
+
+
+
+
+            function movePiece($piece, targetIndex, time) { 
+                // console.log($piece.data("index"));
+                $piece.data('targetIndex', targetIndex); 
+                // console.log($piece.data("targetIndex"));
+                $piece.addClass('movingPiece');
+                var x = targetIndex % PIECES_PER_ROW; 
+                var y = Math.floor(targetIndex / PIECES_PER_ROW);
+                $piece.animate({ 
+                        top: START_Y + y * PUZZLE.pieceSize, 
+                        left: START_X + x * PUZZLE.pieceSize 
+                    }, time, function () { 
+                        $(this).removeClass('movingPiece', 1000, 'easeOutBounce'); 
+                        $(this).data('index', $(this).data('targetIndex')); 
+                    }); 
+                 } 
+            function findPiece(index) { 
+                for (var p in puzzlePieces) 
+                    { if (puzzlePieces[p].data('index') == index) { 
+                        // console.log(puzzlePieces[p])
+                        return puzzlePieces[p]; 
+                    } 
+                 }
+                return null; 
+            }
+
+
+            var availableIndices = []; 
+            for (var i = 0; i < puzzlePieces.length; ++i) 
+            availableIndices.push(i);
+            for (var i = 0; i < puzzlePieces.length; ++i) { 
+                var randomIndex = Math.floor(Math.random() * availableIndices.length); 
+                movePiece(puzzlePieces[i], availableIndices[randomIndex], 500); 
+                availableIndices.splice(randomIndex, 1); 
+            }
+
+
+            function onDragStart(event, ui) { 
+                $(this).addClass('activePiece'); 
+                $(this).data('dropped', false); 
+            }
+
+
+            function onDragStop(event, ui) { 
+                $this = $(this); 
+                $this.removeClass('activePiece');
+                //If the piece wasn't dropped onto a target, return to its starting position
+                if ($this.data('dropped') == false) {
+                    movePiece($this, $this.data('index')); 
+                }
+
+                // THIS IS THE ONLY NEW LINE  
+                    setTimeout(checkComplete,600); 
+            }
+
+
+            function onPieceDrop(event, ui) { 
+                //Get the index of the target 
+                var targetIndex = $(this).data('index'); 
+                var pieceIndex = ui.draggable.data('index'); 
+                ui.draggable.data('dropped', true);
+                movePiece(findPiece(targetIndex), pieceIndex, 100);
+                movePiece(ui.draggable, targetIndex, 100);
+            }
+
+            function checkComplete() { 
+                //Check end conditions
+                // for (var p in puzzlePieces) { 
+                //     if (puzzlePieces[p].data('index') != puzzlePieces[p].data('correctPosition'))
+                //         console.log(puzzlePieces[p].data('index') , puzzlePieces[p].data('correctPosition'));
+                //         return; 
+                // }
+
+
+                // setTimeout(function(){
+                    var value  = true;
+                    for(var i=0;i<puzzlePieces.length;i++){
+                            console.log(puzzlePieces[i].data('index'),puzzlePieces[i].data('correctPosition'))
+                            if(puzzlePieces[i].data('index') != puzzlePieces[i].data('correctPosition')){
+                                value  = false;
+                            }
+                        }
+                    if(value){
+                        $('#txtMessage').val("Praise the sun!");
+                        sendMessage(); 
+                    }
+                    }
+
+                
+            // }
+
+
+            // console.log($piece)
+            $piece.animate({ 
+                top: START_Y + y * PUZZLE.pieceSize, 
+                left: START_X + x * PUZZLE.pieceSize }, 1000, function () { 
+                    $(this).removeClass('movingPiece', 1000, 'easeOutBounce'); 
+                    $(this).data('index', $(this).data('targetIndex'));
+                    
+                });
+        </script>
+
+        <script type="text/template" id="messageTemplate">
+            <div class="message">
+                <b>[username] said:</b>[message]
+            </div>
+        </script>
+
+
+
+        
+
+    </body>
+</html>
